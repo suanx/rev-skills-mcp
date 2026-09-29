@@ -27,10 +27,24 @@ jobs:
       - name: Deploy to EdgeOne Pages（全球加速，不含中国内地）
         env:
           EO_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+          # 诊断用：常见命名变体，以及是否被误建成 repository variable
+          EO_ALT1: ${{ secrets.EDGEONE_PAGES_API_TOKEN }}
+          EO_ALT2: ${{ secrets.EDGEONE_TOKEN }}
+          EO_ALT3: ${{ secrets.EDGEONE_API_TOKENS }}
+          EO_VAR1: ${{ vars.EDGEONE_API_TOKEN }}
         run: |
           set +e
           if [ -z "$EO_TOKEN" ]; then
-            echo "::error::EDGEONE_API_TOKEN 未配置或为空（Settings → Secrets and variables → Actions）"
+            FOUND=""
+            for pair in "secrets.EDGEONE_PAGES_API_TOKEN=$EO_ALT1" "secrets.EDGEONE_TOKEN=$EO_ALT2" "secrets.EDGEONE_API_TOKENS=$EO_ALT3" "vars.EDGEONE_API_TOKEN=$EO_VAR1"; do
+              k=${pair%%=*}; v=${pair#*=}
+              [ -n "$v" ] && FOUND="$FOUND $k(len=${#v})"
+            done
+            if [ -n "$FOUND" ]; then
+              echo "::error::EDGEONE_API_TOKEN 为空，但检测到已配置的近似命名：$FOUND —— 请改名或告诉我用哪个"
+            else
+              echo "::error::EDGEONE_API_TOKEN 为空，且常见变体也都为空 —— 大概率没存进 Actions 的 Repository secrets（注意 Secrets 与 Variables 是两个不同入口）"
+            fi
             exit 1
           fi
           echo "EDGEONE_API_TOKEN 已注入，长度=${#EO_TOKEN}"
