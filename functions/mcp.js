@@ -18,6 +18,11 @@ const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 // 内容查询
 // ---------------------------------------------------------------------------
 
+// TextEncoder 是 EdgeOne/Workers 运行时全局对象；Buffer 只在 Node 存在，
+// 误用 Buffer 会让 functions/*.js 在边缘运行时抛 ReferenceError（本地 Node 测不出来）。
+const _enc = new TextEncoder();
+const utf8ByteLength = (s) => _enc.encode(s).length;
+
 const findSkill = (name) => SKILLS.find((s) => s.name === name);
 
 /** 规范化 reference 参数 → 在该 skill 的文件列表中查找（默认 SKILL.md） */
@@ -193,7 +198,7 @@ function resourceList() {
       title: file.path === "SKILL.md" ? skill.title : file.path,
       description: file.path === "SKILL.md" ? skill.summary : `${skill.name} 的参考资料`,
       mimeType: "text/markdown",
-      size: Buffer.byteLength(file.content, "utf8"),
+      size: utf8ByteLength(file.content),
     });
   }
   return resources;

@@ -140,6 +140,42 @@ export const SKILLS = ${JSON.stringify(skills, null, 2)};
 writeFileSync(join(FUNCTIONS_DIR, "_content.js"), contentModule, "utf8");
 console.log(`已生成 functions/_content.js（${(Buffer.byteLength(contentModule) / 1024).toFixed(0)} KB）`);
 
+// ---------- 2.5 边缘运行时兼容性检查 ----------
+// functions/*.js 跑在 EdgeOne Functions（Workers 风格运行时），没有 Node 全局对象。
+// 这类错误本地 Node 测试不会暴露（本次 Buffer.byteLength 导致 resources/list 线上 500），
+// 因此构建时静态拦截。
+const EDGE_INCOMPATIBLE = [
+  [/\bBuffer\s*[.(]/g, "Buffer（Node 专有）→ 用 TextEncoder：new TextEncoder().encode(s).length"],
+  [/\bprocess\.[a-zA-Z]/g, "process.*（Node 专有）→ 边缘运行时不可用"],
+  [/\brequire\s*\(/g, "require()（CJS）→ 用 import"],
+  [/from\s+["']node:/g, "node: 内建模块 → 边缘运行时不可用"],
+  [/\b__dirname\b|\b__filename\b/g, "__dirname/__filename（ESM 下不存在）→ 用 import.meta.url"],
+  [/\bglobalThis\.Buffer\b/g, "globalThis.Buffer → 用 TextEncoder"],
+];
+
+function checkEdgeRuntimeCompat() {
+  const problems = [];
+  for (const entry of readdirSync(FUNCTIONS_DIR, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".js")) continue;
+    const src = readFileSync(join(FUNCTIONS_DIR, entry.name), "utf8");
+    for (const [re, hint] of EDGE_INCOMPATIBLE) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(src))) {
+        const line = src.slice(0, m.index).split("\n").length;
+        problems.push(`functions/${entry.name}:${line}  ${m[0].trim()}  —— ${hint}`);
+      }
+    }
+  }
+  if (problems.length) {
+    console.error("❌ 边缘运行时兼容性检查未通过：");
+    for (const p of problems) console.error("   " + p);
+    process.exit(1);
+  }
+  console.log("边缘运行时兼容性检查 ✅（无 Node 专有 API）");
+}
+checkEdgeRuntimeCompat();
+
 // ---------- 3. 组装 dist/ ----------
 rmSync(DIST_DIR, { recursive: true, force: true });
 mkdirSync(join(DIST_DIR, "functions"), { recursive: true });
