@@ -162,4 +162,4 @@ writeFileSync(join(DIST_DIR, "package.json"), JSON.stringify({
   name: "rev-skills-android-mcp", private: true, type: "module",
 }, null, 2), "utf8");
 console.log(`已组装 dist/（index.html + functions + package.json）`);
-console.log("构建完成 ✅  下一步：npx edgeone pages deploy ./dist -n <项目名> -t <API Token>");
+console.log("构建完成 ✅  下一步：npx edgeone pages deploy ./dist -n <项目名> -t <API Token> -a overseas");

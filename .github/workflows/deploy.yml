@@ -20,5 +20,7 @@ jobs:
       - name: Build（生成内容模块 + 组装 dist）
         run: node scripts/build.mjs
 
-      - name: Deploy to EdgeOne Pages
-        run: npx edgeone pages deploy ./dist -n rev-skills-android-mcp -t ${{ secrets.EDGEONE_API_TOKEN }}
+      # -a overseas = 全球加速但不含中国内地（预设域名 *.edgeone.ai）
+      # 若要含中国内地，改成 -a global
+      - name: Deploy to EdgeOne Pages（全球加速，不含中国内地）
+        run: npx edgeone pages deploy ./dist -n rev-skills-android-mcp -t ${{ secrets.EDGEONE_API_TOKEN }} -a overseas

@@ -77,10 +77,21 @@ curl -s localhost:8787/mcp -H 'Content-Type: application/json' \
 
 ```bash
 npm run build
-npx edgeone pages deploy ./dist -n rev-skills-android-mcp -t <EDGEONE_API_TOKEN>
+npx edgeone pages deploy ./dist -n rev-skills-android-mcp -t <EDGEONE_API_TOKEN> -a overseas
 ```
 
 项目不存在会自动创建，返回部署 URL。
+
+### 网络类型（`-a`）
+
+本项目固定使用 **`overseas`**：全球加速，**不含中国内地**。
+
+| 取值 | 含义 |
+| --- | --- |
+| `overseas` | 全球加速，不含中国内地（本项目采用，部署后为 `*.edgeone.ai` 预设域名） |
+| `global` | 全球加速，含中国内地（CLI 默认值，不传 `-a` 时走这个） |
+
+GitHub Actions 的 `deploy.yml` 已带上 `-a overseas`，无需额外配置。若项目此前已按 `global` 创建过，`-a` 可能沿用项目既有设置，需在 EdgeOne Pages 控制台的项目设置里改网络类型。
 
 ### 方式二：GitHub Actions（推荐）
 
