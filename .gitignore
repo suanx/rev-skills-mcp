@@ -4,3 +4,4 @@ functions/_content.js
 *.log
 .DS_Store
 .env
+.edgeone/

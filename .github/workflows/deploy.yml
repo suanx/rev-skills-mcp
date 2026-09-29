@@ -20,7 +20,30 @@ jobs:
       - name: Build（生成内容模块 + 组装 dist）
         run: node scripts/build.mjs
 
-      # -a overseas = 全球加速但不含中国内地（预设域名 *.edgeone.ai）
-      # 若要含中国内地，改成 -a global
+      # -a overseas = 全球加速但不含中国内地（预设域名 *.edgeone.dev）
+      # 若要含中国内地改成 -a global（预设域名 *.edgeone.cool），
+      # 注意含中国内地的区域要求自定义域名先完成 ICP 备案。
+      # 失败时把脱敏后的日志尾部写成 annotation，便于无日志权限时排查。
       - name: Deploy to EdgeOne Pages（全球加速，不含中国内地）
-        run: npx edgeone pages deploy ./dist -n rev-skills-android-mcp -t ${{ secrets.EDGEONE_API_TOKEN }} -a overseas
+        env:
+          EO_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+        run: |
+          set +e
+          if [ -z "$EO_TOKEN" ]; then
+            echo "::error::EDGEONE_API_TOKEN 未配置或为空（Settings → Secrets and variables → Actions）"
+            exit 1
+          fi
+          echo "EDGEONE_API_TOKEN 已注入，长度=${#EO_TOKEN}"
+
+          OUT=$(mktemp)
+          npx --yes edgeone@1.6.41 pages deploy ./dist \
+            -n rev-skills-android-mcp -t "$EO_TOKEN" -a overseas >"$OUT" 2>&1
+          RC=$?
+          cat "$OUT"
+
+          if [ $RC -ne 0 ]; then
+            MSG=$(sed -e 's/\x1b\[[0-9;]*[A-Za-z]//g' -e "s|$EO_TOKEN|[TOKEN]|g" "$OUT" \
+                  | tr '\r' '\n' | grep -v '^\s*$' | tail -20 | tr '\n' ' ' | sed 's/%/%25/g')
+            echo "::error::EdgeOne 部署失败 exit=$RC :: $MSG"
+          fi
+          exit $RC
