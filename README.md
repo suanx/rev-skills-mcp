@@ -20,7 +20,7 @@
 
 ## MCP 接口
 
-端点：`https://<your-domain>/mcp`（Streamable HTTP，JSON 响应模式，无状态）
+端点：`https://eo.suen.us.ci/mcp`（Streamable HTTP，JSON 响应模式，无状态）
 
 **Tools**
 
@@ -38,7 +38,7 @@
 {
   "mcpServers": {
     "rev-skills-android": {
-      "url": "https://<your-edgeone-domain>/mcp"
+      "url": "https://eo.suen.us.ci/mcp"
     }
   }
 }
@@ -86,12 +86,26 @@ npx edgeone pages deploy ./dist -n rev-skills-android-mcp -t <EDGEONE_API_TOKEN>
 
 本项目固定使用 **`overseas`**：全球加速，**不含中国内地**。
 
-| 取值 | 含义 |
-| --- | --- |
-| `overseas` | 全球加速，不含中国内地（本项目采用，部署后为 `*.edgeone.ai` 预设域名） |
-| `global` | 全球加速，含中国内地（CLI 默认值，不传 `-a` 时走这个） |
+| 取值 | 含义 | 预设域名 |
+| --- | --- | --- |
+| `overseas` | 全球加速，**不含中国内地**（本项目采用） | `*.edgeone.dev` |
+| `global` | 全球加速，含中国内地（CLI 默认值，不传 `-a` 时走这个） | `*.edgeone.cool` |
 
 GitHub Actions 的 `deploy.yml` 已带上 `-a overseas`，无需额外配置。若项目此前已按 `global` 创建过，`-a` 可能沿用项目既有设置，需在 EdgeOne Pages 控制台的项目设置里改网络类型。
+
+### ⚠️ 预设域名不能当 MCP 端点用
+
+部署返回的 `*.edgeone.dev` / `*.edgeone.cool` 是**带时效签名的预览链接**，直接访问会返回：
+
+```
+401 UNAUTHORIZED   X-EOP-MSG: eo_time missing
+```
+
+这与网络类型无关（`overseas` 和 `global` 都一样），CLI 和 API 也没有关闭该鉴权的开关。**要给 MCP 客户端长期使用，必须绑自定义域名。**
+
+本项目正式端点：**`https://eo.suen.us.ci/mcp`**
+
+绑域名时在控制台「域名管理 → 添加自定义域名」，按提示加一条 CNAME 即可。选 `overseas` 的额外好处：官方文档规定「加速区域为中国内地可用区或全球（含中国内地）时，添加的域名必须先完成 ICP 备案」，**不含中国内地的区域免备案**。
 
 ### 方式二：GitHub Actions（推荐）
 
