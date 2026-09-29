@@ -1,0 +1,15 @@
+{
+  "name": "rev-skills-android-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Android 逆向/移动安全 skills 汇总的远程 MCP Server（EdgeOne Pages Functions）",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "npm run build && node scripts/dev.mjs",
+    "deploy": "npm run build && npx edgeone pages deploy ./dist -n rev-skills-android-mcp -t $EDGEONE_API_TOKEN"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

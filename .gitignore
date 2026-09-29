@@ -1,0 +1,6 @@
+node_modules/
+dist/
+functions/_content.js
+*.log
+.DS_Store
+.env

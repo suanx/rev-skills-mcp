@@ -1,0 +1,24 @@
+name: Deploy to EdgeOne Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build（生成内容模块 + 组装 dist）
+        run: node scripts/build.mjs
+
+      - name: Deploy to EdgeOne Pages
+        run: npx edgeone pages deploy ./dist -n rev-skills-android-mcp -t ${{ secrets.EDGEONE_API_TOKEN }}

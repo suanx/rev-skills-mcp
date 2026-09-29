@@ -1,0 +1,165 @@
+#!/usr/bin/env node
+/**
+ * 构建脚本：
+ * 1. 解析 skills/ 目录下所有 SKILL.md 及 references/ 子文档（frontmatter 宽容解析）
+ * 2. 生成 functions/_content.js（内容模块，供边缘函数内嵌使用）
+ * 3. 组装 dist/ 部署产物（静态页 + functions + package.json）
+ *
+ * 用法：node scripts/build.mjs
+ */
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, statSync, cpSync } from "node:fs";
+import { join, relative, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const SKILLS_DIR = join(ROOT, "skills");
+const FUNCTIONS_DIR = join(ROOT, "functions");
+const DIST_DIR = join(ROOT, "dist");
+
+/** 读取目录下全部 .md 文件（相对路径，按名称排序） */
+function listMarkdownFiles(dir, prefix = "") {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const full = join(dir, entry.name);
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) out.push(...listMarkdownFiles(full, rel));
+    else if (entry.name.toLowerCase().endsWith(".md")) out.push(rel);
+  }
+  return out;
+}
+
+/**
+ * 宽容解析 frontmatter（不依赖严格 YAML —— 部分 skill 的 frontmatter 格式有瑕疵）。
+ * 提取 name / description / capabilities。
+ */
+function parseFrontmatter(text) {
+  const meta = { name: "", description: "", capabilities: [] };
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!m) return meta;
+  const lines = m[1].split(/\r?\n/);
+  let mode = null; // "description" | "capabilities"
+  const descLines = [];
+  for (const line of lines) {
+    if (/^capabilities:\s*\[/.test(line)) {
+      meta.capabilities = (line.match(/\[(.*?)\]/)?.[1] ?? "")
+        .split(",").map((s) => s.trim()).filter(Boolean);
+      mode = null;
+      continue;
+    }
+    if (/^capabilities:\s*$/.test(line)) { mode = "capabilities"; continue; }
+    if (/^description:\s*>?/.test(line)) {
+      descLines.push(line.replace(/^description:\s*>?/, "").trim());
+      mode = "description";
+      continue;
+    }
+    if (/^name:\s*/.test(line)) { meta.name = line.replace(/^name:\s*/, "").trim(); mode = null; continue; }
+    if (/^type:\s*/.test(line)) { meta.type = line.replace(/^type:\s*/, "").trim(); mode = null; continue; }
+    // 延续块：description 块内的缩进行，或紧邻的顶格杂行（如 re-mobile 中混入的行）
+    if (mode === "description") {
+      if (/^\s+/.test(line)) descLines.push(line.trim());
+      else if (line.trim()) descLines.push(line.trim());
+      continue;
+    }
+    if (mode === "capabilities" && /\[\s*(.+?)\s*\]/.test(line)) {
+      meta.capabilities.push(...(line.match(/\[(.*?)\]/)?.[1] ?? "")
+        .split(",").map((s) => s.trim()).filter(Boolean));
+      continue;
+    }
+  }
+  meta.description = descLines.filter(Boolean).join("\n").trim();
+  return meta;
+}
+
+/** 从 description 中剥离「触发词」并解析为关键词数组 */
+function extractKeywords(description) {
+  const m = description.match(/触发词[:：]\s*([^\n]*)/);
+  if (!m) return [];
+  return m[1].split(/[、，,;；]/).map((s) => s.trim()).filter(Boolean);
+}
+
+/** 去掉触发词后的干净描述（取第一行有意义的句子） */
+function cleanSummary(description) {
+  const head = description.split(/触发词[:：]/)[0];
+  return head.split(/\n+/).map((s) => s.trim()).filter(Boolean).join(" ").trim();
+}
+
+/** 从正文第一个一级标题提取 title */
+function extractTitle(body) {
+  return body.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? "";
+}
+
+/** 单个 skill 目录 → 结构化对象 */
+function buildSkill(dirName) {
+  const dir = join(SKILLS_DIR, dirName);
+  const files = listMarkdownFiles(dir).map((rel) => {
+    const raw = readFileSync(join(dir, rel), "utf8");
+    return { path: rel, content: raw };
+  });
+  const skillFile = files.find((f) => f.path === "SKILL.md");
+  if (!skillFile) throw new Error(`skills/${dirName} 缺少 SKILL.md`);
+  const meta = parseFrontmatter(skillFile.content);
+  const body = skillFile.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+  const name = meta.name || dirName;
+  return {
+    name,
+    dir: dirName,
+    type: meta.type || "atomic",
+    title: extractTitle(body) || name,
+    summary: cleanSummary(meta.description),
+    description: meta.description,
+    keywords: extractKeywords(meta.description),
+    capabilities: meta.capabilities,
+    references: files.filter((f) => f.path !== "SKILL.md").map((f) => f.path),
+    files,
+  };
+}
+
+// ---------- 1. 解析 skills ----------
+if (!existsSync(SKILLS_DIR)) throw new Error("缺少 skills/ 目录，请先放入 skills");
+const skillDirs = readdirSync(SKILLS_DIR, { withFileTypes: true })
+  .filter((e) => e.isDirectory() && existsSync(join(SKILLS_DIR, e.name, "SKILL.md")))
+  .map((e) => e.name).sort();
+const skills = skillDirs.map(buildSkill);
+const fileCount = skills.reduce((n, s) => n + s.files.length, 0);
+console.log(`解析完成：${skills.length} 个 skills / ${fileCount} 个 markdown 文件`);
+
+// ---------- 2. 生成 functions/_content.js ----------
+const buildInfo = {
+  name: "rev-skills-android",
+  version: "1.0.0",
+  builtAt: new Date().toISOString(),
+  skillCount: skills.length,
+  fileCount,
+};
+// 文件级轻量索引（搜索用）：内容数组剔除，只保留 SKILLS 里的 files
+const contentModule = `// AUTO-GENERATED by scripts/build.mjs — 请勿手动编辑
+export const SERVER = ${JSON.stringify({ name: buildInfo.name, version: buildInfo.version }, null, 2)};
+export const BUILD_INFO = ${JSON.stringify(buildInfo, null, 2)};
+export const SKILLS = ${JSON.stringify(skills, null, 2)};
+`;
+writeFileSync(join(FUNCTIONS_DIR, "_content.js"), contentModule, "utf8");
+console.log(`已生成 functions/_content.js（${(Buffer.byteLength(contentModule) / 1024).toFixed(0)} KB）`);
+
+// ---------- 3. 组装 dist/ ----------
+rmSync(DIST_DIR, { recursive: true, force: true });
+mkdirSync(join(DIST_DIR, "functions"), { recursive: true });
+cpSync(join(FUNCTIONS_DIR, "_content.js"), join(DIST_DIR, "functions", "_content.js"));
+cpSync(join(FUNCTIONS_DIR, "mcp.js"), join(DIST_DIR, "functions", "mcp.js"));
+cpSync(join(ROOT, "index.html"), join(DIST_DIR, "index.html"));
+// 页面注入 skills 数据（< 转义为 \u003c，防止 </script> 破坏内联脚本）
+let page = readFileSync(join(DIST_DIR, "index.html"), "utf8");
+const safeJson = (obj) => JSON.stringify(obj).replace(/</g, "\\u003c");
+page = page.replace("__SKILLS_DATA__", safeJson(
+  skills.map((s) => ({
+    name: s.name, type: s.type, title: s.title, summary: s.summary,
+    keywords: s.keywords, capabilities: s.capabilities, references: s.references,
+  }))
+));
+page = page.replace("__BUILD_INFO__", safeJson(buildInfo));
+writeFileSync(join(DIST_DIR, "index.html"), page, "utf8");
+// dist 中的 package.json（EdgeOne Pages 部署约定）
+writeFileSync(join(DIST_DIR, "package.json"), JSON.stringify({
+  name: "rev-skills-android-mcp", private: true, type: "module",
+}, null, 2), "utf8");
+console.log(`已组装 dist/（index.html + functions + package.json）`);
+console.log("构建完成 ✅  下一步：npx edgeone pages deploy ./dist -n <项目名> -t <API Token>");

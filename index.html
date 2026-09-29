@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>rev-skills-android · MCP Server</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --amber: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 15px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px 80px; }
+  header h1 { font-size: 28px; letter-spacing: .5px; }
+  header h1 .dot { color: var(--green); }
+  header p.sub { color: var(--muted); margin-top: 8px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { font-size: 12px; border: 1px solid var(--border); border-radius: 999px; padding: 2px 12px; color: var(--muted); background: var(--panel); }
+  h2 { font-size: 18px; margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+  pre { background: #0a0d12; border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin-top: 12px; }
+  code.inline { background: #0a0d12; border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td .kw { color: var(--amber); font-size: 12px; }
+  td.name code { color: var(--accent); font-weight: 600; }
+  td .refs { color: var(--muted); font-size: 12px; display: block; margin-top: 4px; }
+  .tag { display: inline-block; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; margin-right: 4px; color: var(--muted); }
+  .tag.gateway { color: var(--green); border-color: var(--green); }
+  ul.tools { list-style: none; }
+  ul.tools li { padding: 8px 0; border-bottom: 1px dashed var(--border); }
+  ul.tools li:last-child { border-bottom: none; }
+  ul.tools code { color: var(--accent); }
+  ul.tools p { color: var(--muted); font-size: 13px; }
+  .copy { float: right; font-size: 12px; color: var(--accent); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+  .copy:hover { border-color: var(--accent); }
+  footer { margin-top: 56px; color: var(--muted); font-size: 13px; }
+  a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>rev-skills-android <span class="dot">●</span> MCP Server</h1>
+    <p class="sub">Android 逆向 / 移动安全技能库 — 已封装为远程 MCP（Streamable HTTP，零依赖，运行于 EdgeOne Pages Functions）</p>
+    <div class="badges">
+      <span class="badge" id="b-skills">— skills</span>
+      <span class="badge" id="b-files">— files</span>
+      <span class="badge" id="b-built">—</span>
+      <span class="badge">MCP 2025-06-18</span>
+      <span class="badge">EdgeOne Pages</span>
+    </div>
+  </header>
+
+  <h2>接入 MCP</h2>
+  <div class="card">
+    <p>端点：<code class="inline" id="endpoint">/mcp</code>（POST，application/json）</p>
+    <pre id="cfg">{
+  "mcpServers": {
+    "rev-skills-android": {
+      "url": "https://&lt;your-edgeone-domain&gt;/mcp"
+    }
+  }
+}</pre>
+    <p style="color: var(--muted); font-size: 13px; margin-top: 10px;">
+      CodeBuddy / Claude / Cursor / Cherry Studio 等支持远程 MCP 的客户端均可接入；将 URL 替换为实际部署域名。
+    </p>
+  </div>
+
+  <h2>工具（Tools）</h2>
+  <div class="card">
+    <ul class="tools">
+      <li><code>list_skills</code><p>列出全部 skills：名称、定位、触发词、references 索引。任务开始前先调用。</p></li>
+      <li><code>read_skill</code><p>读取 skill 全文（<code>skill</code> + 可选 <code>reference</code>，默认 SKILL.md，可指定 references/ 子文档）。</p></li>
+      <li><code>search_skills</code><p>跨 skills 全文检索（关键词 AND 匹配），返回相关片段与文件定位。</p></li>
+    </ul>
+  </div>
+
+  <h2>Skills 清单</h2>
+  <div class="card" style="padding: 4px 8px;">
+    <table>
+      <thead><tr><th>名称</th><th>定位</th><th>触发词</th></tr></thead>
+      <tbody id="skills-body"></tbody>
+    </table>
+  </div>
+
+  <h2>调试</h2>
+  <div class="card">
+    <pre>curl -s https://&lt;your-edgeone-domain&gt;/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</pre>
+  </div>
+
+  <footer>rev-skills-android MCP · 构建于 <span id="built-at">—</span> · skills 内容仅供安全研究与授权测试场景使用</footer>
+</div>
+
+<script>
+  const SKILLS = __SKILLS_DATA__;
+  const INFO = __BUILD_INFO__;
+
+  document.getElementById('b-skills').textContent = INFO.skillCount + ' skills';
+  document.getElementById('b-files').textContent = INFO.fileCount + ' md files';
+  document.getElementById('b-built').textContent = 'build ' + INFO.builtAt.slice(0, 10);
+  document.getElementById('built-at').textContent = INFO.builtAt;
+
+  const tb = document.getElementById('skills-body');
+  for (const s of SKILLS) {
+    const tr = document.createElement('tr');
+    const kw = (s.keywords || []).slice(0, 6).join(' / ');
+    const caps = (s.capabilities || []).map(c => '<span class="tag">' + c + '</span>').join('');
+    tr.innerHTML =
+      '<td class="name"><code>' + s.name + '</code>' + (s.type === 'gateway' ? ' <span class="tag gateway">gateway</span>' : '') +
+      '<span class="refs">' + (s.references.length ? s.references.join('、') : '无 references') + '</span></td>' +
+      '<td><b>' + s.title + '</b><br><span style="color:var(--muted);font-size:13px">' + s.summary.replace(/</g, '&lt;') + '</span><div style="margin-top:6px">' + caps + '</div></td>' +
+      '<td><span class="kw">' + (kw || '—') + '</span></td>';
+    tb.appendChild(tr);
+  }
+</script>
+</body>
+</html>
